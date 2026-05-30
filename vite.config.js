@@ -11,4 +11,8 @@ export default defineConfig({
       '@': path.resolve(__dirname, '.'),
     },
   },
+  build: {
+    // Force esbuild minifier — avoids lightningcss native binary missing on Linux (Netlify)
+    minify: 'esbuild',
+  },
 });
