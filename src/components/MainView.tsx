@@ -271,7 +271,17 @@ export default function MainView({
 
       if (!res.ok) {
         const errorJson = await res.json();
-        throw new Error(errorJson.error || "Communication fault.");
+        // Build a human-readable error depending on the code returned
+        const code = errorJson.code || "";
+        let friendlyError = errorJson.error || "Communication fault.";
+        if (code === "API_KEY_SUSPENDED" || res.status === 403) {
+          friendlyError = "🔑 Your Gemini API key has been **suspended by Google**. Visit aistudio.google.com/apikey to generate a new free key, then paste it in Settings (gear icon).";
+        } else if (code === "RATE_LIMITED" || res.status === 429) {
+          friendlyError = "⏳ Gemini API rate limit hit. Please wait 30 seconds and try again.";
+        } else if (code === "API_KEY_INVALID" || res.status === 401) {
+          friendlyError = "🔑 Invalid API key. Double-check the key in Settings or get a new one at aistudio.google.com/apikey.";
+        }
+        throw new Error(friendlyError);
       }
 
       const { result } = await res.json();
@@ -298,7 +308,7 @@ export default function MainView({
         {
           id: `ai-err-${Date.now()}`,
           role: "ai",
-          content: `❌ **Failed to complete analytical loop:** \n\n${err.message || "Unknown error"}. Make sure your Gemini API key from settings is typed accurately or try submitting again.`,
+          content: `❌ **Analysis failed:**\n\n${err.message || "An unexpected error occurred. Please try again."}`,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         }
       ]);

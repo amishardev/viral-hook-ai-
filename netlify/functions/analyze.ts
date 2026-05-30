@@ -249,7 +249,7 @@ export const handler: Handler = async (event: HandlerEvent, _context: HandlerCon
     }
 
     const response = await ai.models.generateContent({
-      model: "gemini-2.0-flash",
+      model: "gemini-2.5-flash-preview-05-20",
       contents,
       config: {
         responseMimeType: "application/json",
@@ -284,8 +284,72 @@ export const handler: Handler = async (event: HandlerEvent, _context: HandlerCon
     }
   } catch (error: any) {
     console.error("Critical error in analyze function:", error);
+
+    // Detect suspended / revoked API key (CONSUMER_SUSPENDED or PERMISSION_DENIED)
+    const errMsg: string = (error.message || "").toLowerCase();
+    const errStr: string = JSON.stringify(error).toLowerCase();
+
+    if (
+      errMsg.includes("consumer_suspended") ||
+      errMsg.includes("permission_denied") ||
+      errMsg.includes("has been suspended") ||
+      errStr.includes("consumer_suspended") ||
+      errStr.includes("permission_denied") ||
+      (error.status === 403) ||
+      (error.code === 403)
+    ) {
+      return {
+        statusCode: 403,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          error:
+            "Your Gemini API key has been suspended or revoked by Google. Please go to https://aistudio.google.com/apikey and generate a new API key, then update it in Settings.",
+          code: "API_KEY_SUSPENDED",
+        }),
+      };
+    }
+
+    // Detect rate limit / quota exceeded
+    if (
+      errMsg.includes("429") ||
+      errMsg.includes("quota") ||
+      errMsg.includes("rate_limit") ||
+      errMsg.includes("resource_exhausted") ||
+      (error.status === 429) ||
+      (error.code === 429)
+    ) {
+      return {
+        statusCode: 429,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          error:
+            "Gemini API rate limit reached. Please wait 30 seconds and try again, or check your quota at https://aistudio.google.com/apikey.",
+          code: "RATE_LIMITED",
+        }),
+      };
+    }
+
+    // Detect invalid / wrong API key
+    if (
+      errMsg.includes("api_key_invalid") ||
+      errMsg.includes("invalid api key") ||
+      errMsg.includes("api key not valid") ||
+      (error.status === 400 && errMsg.includes("key"))
+    ) {
+      return {
+        statusCode: 401,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          error:
+            "Invalid Gemini API key. Please double-check the key in Settings or generate a new one at https://aistudio.google.com/apikey.",
+          code: "API_KEY_INVALID",
+        }),
+      };
+    }
+
     return {
       statusCode: 500,
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         error: error.message || "An unexpected error occurred during analysis.",
       }),
